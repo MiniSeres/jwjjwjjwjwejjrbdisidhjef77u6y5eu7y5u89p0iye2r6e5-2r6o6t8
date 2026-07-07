@@ -1,7 +1,7 @@
 from flask import Flask, render_template, jsonify, request
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-import json, secrets, os, subprocess, re, time, tempfile, shutil
+import json, secrets, os, subprocess, re, tempfile, shutil
 from datetime import datetime, timedelta
 from functools import wraps
 import bcrypt
@@ -58,7 +58,6 @@ def auth_required(f):
         if not token:
             return jsonify({"error": "Missing token"}), 401
         data = load_data()
-        now = datetime.now().isoformat()
         for user, info in data["users"].items():
             if info.get("token") == token:
                 expiry = info.get("token_expiry")
@@ -80,13 +79,11 @@ def run_in_docker(code, language, timeout=3):
         code_file = Path(temp_dir) / f"code.{ext}"
         with open(code_file, "w") as f:
             f.write(code)
-        
         if language == "cpp":
             subprocess.run(["g++", str(code_file), "-o", f"{temp_dir}/code"], capture_output=True, text=True, timeout=10)
             cmd = [f"{temp_dir}/code"]
         else:
             cmd = {"python": ["python3", str(code_file)], "javascript": ["node", str(code_file)], "ruby": ["ruby", str(code_file)]}.get(language)
-        
         result = subprocess.run(
             ["timeout", str(timeout), *cmd],
             capture_output=True,
@@ -198,17 +195,14 @@ def api_create_bot():
     user_bots = [b for b in data["bots"].values() if b["owner"] == request.user]
     if len(user_bots) >= MAX_BOTS_PER_USER:
         return jsonify({"error": f"Max {MAX_BOTS_PER_USER} bots"}), 400
-    
     name = sanitize_filename(request.json.get('name'))
     if not name or len(name) < 3:
         return jsonify({"error": "Invalid name"}), 400
     if name in data["bots"]:
         return jsonify({"error": "Exists"}), 400
-    
     language = request.json.get('language', 'python')
     if language not in ALLOWED_LANGUAGES:
         return jsonify({"error": "Unsupported language"}), 400
-    
     data["bots"][name] = {
         "owner": request.user,
         "username": sanitize_filename(request.json.get('username', f"{name}_bot")),
@@ -234,7 +228,6 @@ def api_bot_action(bot_name):
     bot = data["bots"].get(bot_name)
     if not bot or bot["owner"] != request.user:
         return jsonify({"error": "Not found"}), 404
-    
     action = request.json.get('action')
     if action == "toggle":
         bot["status"] = "off" if bot["status"] == "on" else "on"
@@ -264,7 +257,6 @@ def api_get_code(bot_name):
     bot = data["bots"].get(bot_name)
     if not bot or bot["owner"] != request.user:
         return jsonify({"error": "Not found"}), 404
-    
     language = bot.get("language", "python")
     ext = {"python":"py", "javascript":"js", "ruby":"rb", "cpp":"cpp"}.get(language, "txt")
     code_file = Path(f"bots/{bot_name}.{ext}")
@@ -284,15 +276,12 @@ def api_save_code(bot_name):
     bot = data["bots"].get(bot_name)
     if not bot or bot["owner"] != request.user:
         return jsonify({"error": "Not found"}), 404
-    
     code = request.json.get('code', '')
     if len(code) > MAX_CODE_SIZE:
         return jsonify({"error": "Code too large"}), 400
-    
     language = request.json.get('language', 'python')
     if language not in ALLOWED_LANGUAGES:
         return jsonify({"error": "Unsupported language"}), 400
-    
     token = request.json.get('token', '')
     bot["language"] = language
     bot["token"] = token
@@ -313,17 +302,14 @@ def api_run_code(bot_name):
         return jsonify({"error": "Not found"}), 404
     if bot.get("status") != "on":
         return jsonify({"error": "Bot offline"}), 400
-    
     language = bot.get("language", "python")
     ext = {"python":"py", "javascript":"js", "ruby":"rb", "cpp":"cpp"}.get(language, "txt")
     code_file = Path(f"bots/{bot_name}.{ext}")
     if not code_file.exists():
         return jsonify({"error": "Code not found"}), 404
-    
     try:
         with open(code_file, "r") as f:
             code = f.read()
-        
         output = run_in_docker(code, language, timeout=3)
         logger.info(f"Code executed: {bot_name} by {request.user}")
         return jsonify({"output": output or "No output"})
