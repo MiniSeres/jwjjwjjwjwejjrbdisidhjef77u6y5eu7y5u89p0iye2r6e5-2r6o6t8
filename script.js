@@ -1,0 +1,26 @@
+let saves=[],currentSave=null,currentFile=null,user=null,editor=null,start=Date.now()
+function login(){user={email:'admin@gmail.com',uid:'123'};document.getElementById('login').style.display='none';document.getElementById('app').style.display='flex';loadData()}
+function register(){user={email:'admin@gmail.com',uid:'123'};document.getElementById('login').style.display='none';document.getElementById('app').style.display='flex';saves=[];render()}
+function logout(){user=null;localStorage.clear();location.reload()}
+function loadData(){let d=localStorage.getItem('saves_'+user.uid);if(d){saves=JSON.parse(d);render()}}
+function saveData(){localStorage.setItem('saves_'+user.uid,JSON.stringify(saves))}
+function newSave(){let n=prompt('Tên Save:');if(!n)return;saves.push({id:Date.now()+'',name:n,files:[],token:0,timer:0,active:1});saveData();render();selectSave(saves[saves.length-1].id)}
+function render(){let h='';saves.forEach(s=>{h+=`<div class="item"><span onclick="selectSave('${s.id}')">${s.name}</span><span><button onclick="renameSave('${s.id}')">✏️</button><button onclick="delSave('${s.id}')">🗑️</button><button onclick="viewFiles('${s.id}')">👁️</button></span></div>`});document.getElementById('list').innerHTML=h}
+function selectSave(id){currentSave=saves.find(s=>s.id==id);if(!currentSave)return;document.getElementById('name').textContent=currentSave.name;if(currentSave.files.length){selectFile(currentSave.files[0].id)}else{editor.setValue('// Tạo file mới')}document.getElementById('token').textContent=currentSave.token?'ON':'OFF';document.getElementById('token').style.color=currentSave.token?'#58a6ff':'#f85149'}
+function renameSave(id){let s=saves.find(x=>x.id==id);if(!s)return;let n=prompt('Tên mới:',s.name);if(n){s.name=n;saveData();render()}}
+function delSave(id){if(!confirm('Xóa?'))return;saves=saves.filter(x=>x.id!=id);saveData();render();currentSave=null;document.getElementById('name').textContent='Chọn Save'}
+function viewFiles(id){let s=saves.find(x=>x.id==id);if(!s)return;let t='📁 '+s.name+'\n';s.files.forEach(f=>{t+='📄 '+f.name+(f.active?' ✅':' ❌')+'\n'});alert(t)}
+function viewAll(){render();document.getElementById('name').textContent='📂 Tất cả Save'}
+function addFile(){if(!currentSave){alert('Chọn Save trước!');return}let n=prompt('Tên file (vd: test.js):');if(!n)return;let lang='plaintext';let ext=n.split('.').pop();let map={js:'javascript',py:'python',cpp:'cpp',cs:'csharp',rb:'ruby',css:'css',html:'html',php:'php',json:'json'};if(map[ext])lang=map[ext];currentSave.files.push({id:Date.now()+'',name:n,content:'',lang:lang,active:1});saveData();render();selectFile(currentSave.files[currentSave.files.length-1].id)}
+function selectFile(id){if(!currentSave)return;let f=currentSave.files.find(x=>x.id==id);if(!f)return;currentFile=f;editor.setValue(f.content);monaco.editor.setModelLanguage(editor.getModel(),f.lang);document.getElementById('name').textContent='📄 '+f.name}
+function rename(){if(!currentSave||!currentFile)return;let n=prompt('Tên mới:',currentFile.name);if(n){currentFile.name=n;saveData();render();document.getElementById('name').textContent='📄 '+n}}
+function del(){if(!currentSave||!currentFile||!confirm('Xóa file?'))return;currentSave.files=currentSave.files.filter(x=>x.id!=currentFile.id);saveData();render();currentFile=null;document.getElementById('name').textContent=currentSave.name}
+function toggleToken(){if(!currentSave)return;currentSave.token=currentSave.token?0:1;saveData();document.getElementById('token').textContent=currentSave.token?'ON':'OFF';document.getElementById('token').style.color=currentSave.token?'#58a6ff':'#f85149'}
+function toggle247(){if(!currentSave)return;currentSave.active=currentSave.active?0:1;saveData();alert(currentSave.active?'✅ Bật 24/7':'❌ Tắt 24/7')}
+function setTimer(v){if(!currentSave)return;currentSave.timer=parseInt(v);saveData();if(v>0)alert('⏰ Timer '+v+' phút!')}
+require.config({paths:{vs:'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.1/min/vs'}})
+require(['vs/editor/editor.main'],function(){editor=monaco.editor.create(document.getElementById('code'),{value:'// Chọn Save & File',language:'javascript',theme:'vs-dark',automaticLayout:true,lineNumbers:'on',fontSize:13,minimap:{enabled:false}});editor.onDidChangeModelContent(()=>{updateStats();autoSave()})})
+function updateStats(){if(!editor)return;let m=editor.getModel();if(!m)return;document.getElementById('lines').textContent=m.getLineCount();document.getElementById('chars').textContent=m.getValue().length}
+function autoSave(){if(!currentSave||!currentFile)return;currentFile.content=editor.getValue();saveData()}
+setInterval(()=>{let e=Math.floor((Date.now()-start)/1000);let h=String(Math.floor(e/3600)).padStart(2,'0'),m=String(Math.floor((e%3600)/60)).padStart(2,'0'),s=String(e%60).padStart(2,'0');document.getElementById('time').textContent=h+':'+m+':'+s},1000)
+setInterval(()=>{if(!currentFile)return;let f=currentFile;let fr=document.getElementById('preview');if(f.lang=='html'){fr.src='data:text/html;charset=utf-8,'+encodeURIComponent(f.content)}else{fr.srcdoc='<html><body><pre style="color:#fff;background:#0d1117;padding:20px;font-family:monospace;white-space:pre-wrap">'+f.content+'</pre></body></html>'}},3000)
